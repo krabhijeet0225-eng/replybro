@@ -8,3 +8,84 @@
 export interface HealthStatus {
   status: string;
 }
+
+/**
+ * The reply mode/tone
+ */
+export type GenerateReplyBodyMode =
+  (typeof GenerateReplyBodyMode)[keyof typeof GenerateReplyBodyMode];
+
+export const GenerateReplyBodyMode = {
+  romantic: "romantic",
+  funny: "funny",
+  savage: "savage",
+  emotional: "emotional",
+} as const;
+
+export interface GenerateReplyBody {
+  /** The conversation text to analyze */
+  conversation: string;
+  /** The reply mode/tone */
+  mode: GenerateReplyBodyMode;
+}
+
+export type GenerateReplyResponseMoodScores = {
+  romantic: number;
+  funny: number;
+  savage: number;
+  emotional: number;
+};
+
+export interface GenerateReplyResponse {
+  reply: string;
+  moodScores: GenerateReplyResponseMoodScores;
+  /** Percentage 0-100 */
+  interestLevel: number;
+  signals: string[];
+}
+
+export interface SavedReply {
+  id: number;
+  conversationSnippet: string;
+  mode: string;
+  reply: string;
+  interestLevel: number;
+  createdAt: string;
+}
+
+export interface ErrorResponse {
+  error: string;
+}
+
+export interface AnthropicConversation {
+  id: number;
+  title: string;
+  createdAt: string;
+}
+
+export interface AnthropicMessage {
+  id: number;
+  conversationId: number;
+  role: string;
+  content: string;
+  createdAt: string;
+}
+
+export interface CreateAnthropicConversationBody {
+  title: string;
+}
+
+export interface SendAnthropicMessageBody {
+  content: string;
+}
+
+export interface AnthropicConversationWithMessages {
+  id: number;
+  title: string;
+  createdAt: string;
+  messages: AnthropicMessage[];
+}
+
+export interface AnthropicError {
+  error: string;
+}
