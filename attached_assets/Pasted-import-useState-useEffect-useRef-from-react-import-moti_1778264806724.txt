@@ -1,0 +1,1116 @@
+import { useState, useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+
+// ── Inline CSS injected once ──────────────────────────────────────────────────
+const GLOBAL_CSS = `
+  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --indigo:   #6C63FF;
+    --violet:   #A78BFA;
+    --blue:     #3B82F6;
+    --pink:     #EC4899;
+    --cyan:     #22D3EE;
+    --bg0:      #080B14;
+    --bg1:      #0D1120;
+    --bg2:      #111827;
+    --bg3:      #1A2235;
+    --bg4:      #1F2D44;
+    --glass:    rgba(255,255,255,0.04);
+    --glass2:   rgba(255,255,255,0.07);
+    --border:   rgba(255,255,255,0.08);
+    --border2:  rgba(108,99,255,0.35);
+    --text:     #F0F2FF;
+    --muted:    #8892A4;
+    --muted2:   #5A6478;
+    --grad1: linear-gradient(135deg, #6C63FF 0%, #3B82F6 50%, #22D3EE 100%);
+    --grad2: linear-gradient(135deg, #EC4899 0%, #A78BFA 50%, #6C63FF 100%);
+    --grad3: linear-gradient(135deg, #6C63FF 0%, #A78BFA 100%);
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg0);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg1); }
+  ::-webkit-scrollbar-thumb { background: var(--indigo); border-radius: 99px; }
+
+  .font-syne { font-family: 'Syne', sans-serif; }
+
+  /* noise grain overlay */
+  .noise::after {
+    content: '';
+    position: fixed; inset: 0; pointer-events: none; z-index: 999;
+    opacity: 0.025;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  /* glass card */
+  .glass-card {
+    background: var(--glass);
+    border: 1px solid var(--border);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: 20px;
+  }
+  .glass-card-strong {
+    background: var(--glass2);
+    border: 1px solid var(--border2);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border-radius: 20px;
+  }
+
+  /* gradient text */
+  .grad-text {
+    background: var(--grad1);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .grad-text-pink {
+    background: var(--grad2);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  /* glow orb bg */
+  .orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* nav */
+  .nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 60px;
+    border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(20px);
+    background: rgba(8,11,20,0.7);
+  }
+  @media(max-width:768px){ .nav { padding: 16px 24px; } }
+
+  .nav-logo {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800; font-size: 22px;
+    display: flex; align-items: center; gap: 8px;
+    cursor: pointer;
+  }
+
+  .nav-links { display: flex; align-items: center; gap: 32px; }
+  .nav-link {
+    font-size: 14px; color: var(--muted); cursor: pointer;
+    transition: color .2s; font-weight: 400;
+    background: none; border: none;
+  }
+  .nav-link:hover { color: var(--text); }
+
+  .btn-primary {
+    background: var(--grad1);
+    border: none; border-radius: 99px;
+    padding: 11px 24px; font-size: 14px; font-weight: 500;
+    color: #fff; cursor: pointer;
+    transition: opacity .2s, transform .15s;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .btn-primary:hover { opacity: .9; transform: translateY(-1px); }
+  .btn-primary:active { transform: scale(.97); }
+
+  .btn-outline {
+    background: transparent;
+    border: 1px solid var(--border2); border-radius: 99px;
+    padding: 11px 28px; font-size: 14px; font-weight: 500;
+    color: var(--violet); cursor: pointer;
+    transition: background .2s, transform .15s;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .btn-outline:hover { background: rgba(108,99,255,.1); transform: translateY(-1px); }
+
+  @media(max-width:600px){ .nav-links .nav-link { display: none; } }
+
+  /* hero */
+  .hero {
+    min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    flex-direction: column; text-align: center;
+    padding: 120px 24px 80px;
+    position: relative; overflow: hidden;
+  }
+
+  .hero-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(108,99,255,.12);
+    border: 1px solid rgba(108,99,255,.3);
+    border-radius: 99px; padding: 6px 16px;
+    font-size: 13px; color: var(--violet);
+    margin-bottom: 28px;
+  }
+  .hero-badge-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--indigo);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%,100%{ opacity:1; transform:scale(1); }
+    50%{ opacity:.5; transform:scale(.8); }
+  }
+
+  .hero-h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(40px, 6vw, 80px);
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: -2px;
+    max-width: 900px;
+    margin-bottom: 24px;
+  }
+
+  .hero-sub {
+    font-size: clamp(16px, 2vw, 20px);
+    color: var(--muted);
+    max-width: 600px;
+    line-height: 1.7;
+    margin-bottom: 44px;
+    font-weight: 300;
+  }
+
+  .hero-cta { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; justify-content: center; }
+
+  .btn-hero {
+    background: var(--grad1);
+    border: none; border-radius: 99px;
+    padding: 16px 36px; font-size: 16px; font-weight: 500;
+    color: #fff; cursor: pointer;
+    transition: opacity .2s, transform .15s, box-shadow .2s;
+    font-family: 'DM Sans', sans-serif;
+    box-shadow: 0 0 40px rgba(108,99,255,.4);
+  }
+  .btn-hero:hover { opacity:.92; transform: translateY(-2px); box-shadow: 0 0 60px rgba(108,99,255,.6); }
+  .btn-ghost {
+    background: transparent; border: 1px solid var(--border2);
+    border-radius: 99px; padding: 15px 32px; font-size: 16px;
+    color: var(--text); cursor: pointer; font-family: 'DM Sans', sans-serif;
+    transition: background .2s, transform .15s; font-weight: 400;
+  }
+  .btn-ghost:hover { background: var(--glass); transform: translateY(-2px); }
+
+  /* floating chat preview */
+  .hero-preview {
+    margin-top: 72px;
+    width: 100%; max-width: 680px;
+    position: relative;
+  }
+
+  /* features */
+  .section { padding: 100px 60px; position: relative; }
+  @media(max-width:768px){ .section { padding: 80px 24px; } }
+
+  .section-label {
+    font-size: 12px; font-weight: 600; letter-spacing: 3px;
+    text-transform: uppercase; color: var(--indigo);
+    margin-bottom: 16px;
+  }
+  .section-h2 {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(28px, 4vw, 48px);
+    font-weight: 700; letter-spacing: -1px;
+    margin-bottom: 16px;
+  }
+  .section-sub {
+    color: var(--muted); font-size: 18px;
+    max-width: 560px; line-height: 1.7; font-weight: 300;
+  }
+
+  .features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px; margin-top: 64px;
+  }
+
+  .feat-card {
+    padding: 32px;
+    border-radius: 20px;
+    background: var(--glass);
+    border: 1px solid var(--border);
+    transition: border-color .3s, transform .3s;
+    cursor: default;
+    position: relative; overflow: hidden;
+  }
+  .feat-card:hover {
+    border-color: rgba(108,99,255,.4);
+    transform: translateY(-4px);
+  }
+  .feat-card::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: radial-gradient(circle at top left, rgba(108,99,255,.08), transparent 60%);
+    opacity: 0; transition: opacity .3s;
+  }
+  .feat-card:hover::before { opacity: 1; }
+
+  .feat-icon {
+    width: 48px; height: 48px; border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; margin-bottom: 20px;
+  }
+  .feat-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 18px; font-weight: 700; margin-bottom: 10px;
+  }
+  .feat-desc { color: var(--muted); font-size: 15px; line-height: 1.7; font-weight: 300; }
+
+  /* modes showcase */
+  .modes-row {
+    display: flex; gap: 12px; flex-wrap: wrap; margin-top: 48px;
+  }
+  .mode-pill {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 20px; border-radius: 99px;
+    font-size: 14px; font-weight: 500; border: 1px solid;
+    transition: transform .2s;
+  }
+  .mode-pill:hover { transform: scale(1.04); }
+
+  /* dashboard */
+  .dash {
+    min-height: 100vh;
+    padding: 100px 60px 60px;
+    display: flex; flex-direction: column;
+    position: relative;
+  }
+  @media(max-width:768px){ .dash { padding: 100px 20px 60px; } }
+
+  .dash-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 40px; flex-wrap: wrap; gap: 16px;
+  }
+  .dash-title {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(24px, 3vw, 36px);
+    font-weight: 700;
+  }
+
+  .dash-grid {
+    display: grid;
+    grid-template-columns: 1fr 360px;
+    gap: 24px;
+    flex: 1;
+  }
+  @media(max-width:1024px){ .dash-grid { grid-template-columns: 1fr; } }
+
+  /* textarea */
+  .chat-input-wrap { position: relative; }
+  .chat-textarea {
+    width: 100%;
+    background: rgba(255,255,255,.04);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px; line-height: 1.7;
+    resize: vertical; min-height: 160px;
+    transition: border-color .2s;
+    outline: none;
+  }
+  .chat-textarea::placeholder { color: var(--muted2); }
+  .chat-textarea:focus { border-color: var(--indigo); }
+
+  /* mode buttons */
+  .modes-grid {
+    display: grid; grid-template-columns: repeat(4,1fr);
+    gap: 10px; margin: 20px 0;
+  }
+  @media(max-width:600px){ .modes-grid { grid-template-columns: repeat(2,1fr); } }
+
+  .mode-btn {
+    border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 8px;
+    background: var(--glass);
+    color: var(--muted);
+    cursor: pointer; font-family: 'DM Sans', sans-serif;
+    font-size: 14px; font-weight: 500;
+    display: flex; flex-direction: column;
+    align-items: center; gap: 6px;
+    transition: all .2s;
+  }
+  .mode-btn.active {
+    border-color: var(--indigo);
+    background: rgba(108,99,255,.15);
+    color: var(--text);
+    box-shadow: 0 0 20px rgba(108,99,255,.2);
+  }
+  .mode-btn:hover:not(.active) { border-color: rgba(255,255,255,.15); color: var(--text); }
+  .mode-icon { font-size: 20px; }
+
+  /* generate btn */
+  .btn-generate {
+    width: 100%;
+    background: var(--grad1);
+    border: none; border-radius: 14px;
+    padding: 18px; font-size: 16px; font-weight: 600;
+    color: #fff; cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    box-shadow: 0 0 40px rgba(108,99,255,.3);
+    transition: opacity .2s, transform .15s, box-shadow .2s;
+    position: relative; overflow: hidden;
+  }
+  .btn-generate:hover:not(:disabled) {
+    opacity: .92; transform: translateY(-1px);
+    box-shadow: 0 0 60px rgba(108,99,255,.5);
+  }
+  .btn-generate:disabled { opacity: .5; cursor: not-allowed; }
+  .btn-generate::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.12), transparent);
+    transform: translateX(-100%);
+    animation: shimmer 2.5s infinite;
+  }
+  @keyframes shimmer {
+    100% { transform: translateX(100%); }
+  }
+
+  /* response card */
+  .response-card {
+    background: var(--glass2);
+    border: 1px solid var(--border2);
+    border-radius: 20px; padding: 28px;
+    margin-top: 24px;
+    position: relative; overflow: hidden;
+  }
+  .response-card::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 1px;
+    background: var(--grad1);
+  }
+  .response-label {
+    font-size: 11px; font-weight: 600; letter-spacing: 2px;
+    text-transform: uppercase; color: var(--indigo); margin-bottom: 14px;
+  }
+  .response-text {
+    font-size: 16px; line-height: 1.75; color: var(--text); font-weight: 300;
+  }
+  .response-actions {
+    display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap;
+  }
+  .action-btn {
+    background: rgba(255,255,255,.05);
+    border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 16px;
+    color: var(--muted); font-size: 13px;
+    cursor: pointer; font-family: 'DM Sans', sans-serif;
+    transition: all .2s;
+  }
+  .action-btn:hover { background: rgba(255,255,255,.09); color: var(--text); }
+
+  /* sidebar cards */
+  .side-card {
+    background: var(--glass);
+    border: 1px solid var(--border);
+    border-radius: 20px; padding: 24px;
+    margin-bottom: 20px;
+  }
+  .side-card-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 15px; font-weight: 700; margin-bottom: 18px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .side-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+  /* mood gauge */
+  .mood-item {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 14px;
+  }
+  .mood-label { font-size: 13px; color: var(--muted); min-width: 80px; }
+  .mood-bar-bg {
+    flex: 1; height: 6px; background: rgba(255,255,255,.07);
+    border-radius: 99px; overflow: hidden;
+  }
+  .mood-bar-fill {
+    height: 100%; border-radius: 99px;
+    transition: width 1s cubic-bezier(.4,0,.2,1);
+  }
+  .mood-val { font-size: 12px; color: var(--muted); min-width: 30px; text-align: right; }
+
+  /* interest meter */
+  .interest-meter {
+    display: flex; justify-content: center; padding: 8px 0 4px;
+    position: relative;
+  }
+  .interest-label {
+    text-align: center; margin-top: 12px;
+    font-size: 22px; font-weight: 700;
+    font-family: 'Syne', sans-serif;
+  }
+  .interest-sub { text-align: center; font-size: 13px; color: var(--muted); margin-top: 4px; }
+
+  /* tag chips */
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+  .chip {
+    background: rgba(108,99,255,.12);
+    border: 1px solid rgba(108,99,255,.25);
+    border-radius: 99px; padding: 4px 12px;
+    font-size: 12px; color: var(--violet);
+  }
+
+  /* footer */
+  .footer {
+    border-top: 1px solid var(--border);
+    padding: 48px 60px;
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 24px;
+  }
+  @media(max-width:768px){ .footer { padding: 40px 24px; flex-direction: column; text-align: center; } }
+  .footer-copy { font-size: 14px; color: var(--muted2); }
+  .footer-links { display: flex; gap: 24px; }
+  .footer-link { font-size: 14px; color: var(--muted); cursor: pointer; transition: color .2s; text-decoration: none; }
+  .footer-link:hover { color: var(--text); }
+
+  /* loading spinner */
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinner {
+    width: 18px; height: 18px; border-radius: 50%;
+    border: 2px solid rgba(255,255,255,.3);
+    border-top-color: #fff;
+    animation: spin .7s linear infinite;
+  }
+
+  /* typing dots */
+  .typing-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--indigo);
+    animation: bounce .9s infinite;
+    display: inline-block;
+  }
+  .typing-dot:nth-child(2){ animation-delay:.15s; }
+  .typing-dot:nth-child(3){ animation-delay:.3s; }
+  @keyframes bounce {
+    0%,80%,100%{ transform: translateY(0); opacity:.5; }
+    40%{ transform: translateY(-8px); opacity:1; }
+  }
+
+  /* divider */
+  .divider {
+    border: none;
+    height: 1px;
+    background: var(--border);
+    margin: 0;
+  }
+
+  /* scroll reveal */
+  .reveal { opacity: 0; transform: translateY(24px); transition: opacity .6s, transform .6s; }
+  .reveal.visible { opacity: 1; transform: none; }
+`;
+
+// ── Constants ────────────────────────────────────────────────────────────────
+const MODES = [
+  { id: "romantic", label: "Romantic", icon: "💝", color: "#EC4899" },
+  { id: "funny",    label: "Funny",    icon: "😂", color: "#F59E0B" },
+  { id: "savage",   label: "Savage",   icon: "🔥", color: "#EF4444" },
+  { id: "emotional",label: "Emotional",icon: "🫂", color: "#6C63FF" },
+];
+
+const FEATURES = [
+  {
+    icon: "🧠", title: "AI-Powered Replies",
+    desc: "Claude reads the vibe and crafts replies that sound human — not like a robot had a bad day.",
+    grad: "rgba(108,99,255,.15)",
+  },
+  {
+    icon: "🎭", title: "4 Reply Modes",
+    desc: "Go romantic, funny, savage, or emotional. Switch moods on the fly based on what the moment calls for.",
+    grad: "rgba(236,72,153,.15)",
+  },
+  {
+    icon: "📡", title: "Mood Detection",
+    desc: "Our AI reads the emotional subtext of any conversation and gives you an accurate vibe report instantly.",
+    grad: "rgba(34,211,238,.15)",
+  },
+  {
+    icon: "💯", title: "Interest Level Meter",
+    desc: "Know exactly how interested the other person is — no more second-guessing mixed signals.",
+    grad: "rgba(245,158,11,.15)",
+  },
+  {
+    icon: "⚡", title: "Instant Generation",
+    desc: "No loading screens, no waiting. Get your perfect reply in under 2 seconds flat.",
+    grad: "rgba(59,130,246,.15)",
+  },
+  {
+    icon: "🔐", title: "100% Private",
+    desc: "Your chats are never stored or shared. What you paste here, stays here — always.",
+    grad: "rgba(16,185,129,.15)",
+  },
+];
+
+const MOCK_CONVERSATION = `Them: hey, you coming to jake's party saturday?
+Me: maybe idk still deciding
+Them: oh okay... no worries
+Me: why do you ask
+Them: just wanted to know if i'd see you there ig`;
+
+// ── Orbs background ──────────────────────────────────────────────────────────
+function Orbs() {
+  return (
+    <>
+      <div className="orb" style={{ width:600, height:600, top:-200, left:-200, background:"rgba(108,99,255,.18)" }} />
+      <div className="orb" style={{ width:500, height:500, top:200, right:-150, background:"rgba(59,130,246,.12)" }} />
+      <div className="orb" style={{ width:400, height:400, bottom:100, left:"30%", background:"rgba(236,72,153,.1)" }} />
+    </>
+  );
+}
+
+// ── Navbar ───────────────────────────────────────────────────────────────────
+function Navbar({ onGoToDash }) {
+  return (
+    <nav className="nav">
+      <div className="nav-logo">
+        <span style={{ background:"linear-gradient(135deg,#6C63FF,#22D3EE)", borderRadius:10, width:32, height:32, display:"flex", alignItems:"center", justifyContent:"center", fontSize:17 }}>💬</span>
+        <span className="font-syne grad-text">ReplyBro</span>
+      </div>
+      <div className="nav-links">
+        <button className="nav-link">Features</button>
+        <button className="nav-link">How it works</button>
+        <button className="nav-link">Pricing</button>
+        <button className="btn-primary" onClick={onGoToDash}>Try Free →</button>
+      </div>
+    </nav>
+  );
+}
+
+// ── Hero ─────────────────────────────────────────────────────────────────────
+function Hero({ onGoToDash }) {
+  return (
+    <section className="hero">
+      <Orbs />
+      <div style={{ position:"relative", zIndex:1, display:"flex", flexDirection:"column", alignItems:"center" }}>
+        <motion.div
+          className="hero-badge"
+          initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }} transition={{ delay:.1 }}
+        >
+          <span className="hero-badge-dot" />
+          Powered by Claude AI · Free to try
+        </motion.div>
+
+        <motion.h1
+          className="hero-h1 font-syne"
+          initial={{ opacity:0, y:24 }} animate={{ opacity:1, y:0 }} transition={{ delay:.2, duration:.7 }}
+        >
+          Get perfect replies for<br />
+          <span className="grad-text">any chat</span> instantly.
+        </motion.h1>
+
+        <motion.p
+          className="hero-sub"
+          initial={{ opacity:0, y:20 }} animate={{ opacity:1, y:0 }} transition={{ delay:.35 }}
+        >
+          Paste your conversation and let AI generate smart, funny, flirty or savage replies in seconds.
+        </motion.p>
+
+        <motion.div
+          className="hero-cta"
+          initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }} transition={{ delay:.5 }}
+        >
+          <button className="btn-hero" onClick={onGoToDash}>🔥 Generate a Reply</button>
+          <button className="btn-ghost">Watch Demo ▶</button>
+        </motion.div>
+
+        {/* floating mock card */}
+        <motion.div
+          className="hero-preview"
+          initial={{ opacity:0, y:40, scale:.96 }} animate={{ opacity:1, y:0, scale:1 }} transition={{ delay:.7, duration:.8 }}
+        >
+          <div className="glass-card" style={{ padding:"28px", position:"relative", overflow:"hidden" }}>
+            <div style={{ position:"absolute", inset:0, background:"radial-gradient(circle at top right, rgba(108,99,255,.12), transparent 60%)" }} />
+            <div style={{ position:"absolute", top:0, left:0, right:0, height:1, background:"linear-gradient(90deg,transparent,rgba(108,99,255,.6),transparent)" }} />
+            <p style={{ fontSize:12, color:"#6C63FF", letterSpacing:2, textTransform:"uppercase", fontWeight:600, marginBottom:16 }}>💬 Live Preview</p>
+            <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+              {[
+                { from:"them", text:"hey, you coming to Jake's party saturday?" },
+                { from:"me",   text:"maybe, idk lol still deciding" },
+                { from:"them", text:"oh ok... would be cool if you came 👀" },
+              ].map((m, i) => (
+                <div key={i} style={{ display:"flex", justifyContent: m.from==="me" ? "flex-end":"flex-start" }}>
+                  <div style={{
+                    maxWidth:"70%", padding:"10px 16px", borderRadius:14,
+                    background: m.from==="me" ? "linear-gradient(135deg,#6C63FF,#3B82F6)" : "rgba(255,255,255,.07)",
+                    fontSize:14, lineHeight:1.5,
+                    borderBottomRightRadius: m.from==="me" ? 4 : 14,
+                    borderBottomLeftRadius: m.from==="them" ? 4 : 14,
+                  }}>{m.text}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ marginTop:20, padding:"14px 18px", borderRadius:12, background:"rgba(108,99,255,.15)", border:"1px solid rgba(108,99,255,.3)" }}>
+              <span style={{ fontSize:13, color:"#A78BFA" }}>✨ AI Suggestion: </span>
+              <span style={{ fontSize:14 }}>"haha caught me — honestly might show up just to see what the vibe is 👀"</span>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+    </section>
+  );
+}
+
+// ── Features ─────────────────────────────────────────────────────────────────
+function Features() {
+  return (
+    <section className="section" id="features">
+      <div style={{ position:"relative", zIndex:1 }}>
+        <motion.p className="section-label" initial={{ opacity:0 }} whileInView={{ opacity:1 }} viewport={{ once:true }}>
+          Why ReplyBro
+        </motion.p>
+        <motion.h2 className="section-h2 font-syne" initial={{ opacity:0, y:20 }} whileInView={{ opacity:1, y:0 }} viewport={{ once:true }}>
+          Your unfair advantage<br />in <span className="grad-text-pink">every conversation</span>
+        </motion.h2>
+        <motion.p className="section-sub" initial={{ opacity:0, y:16 }} whileInView={{ opacity:1, y:0 }} viewport={{ once:true }} transition={{ delay:.1 }}>
+          Never overthink a reply again. ReplyBro has your back with AI that actually gets human vibes.
+        </motion.p>
+
+        <div className="features-grid">
+          {FEATURES.map((f, i) => (
+            <motion.div
+              key={f.title} className="feat-card"
+              initial={{ opacity:0, y:30 }}
+              whileInView={{ opacity:1, y:0 }}
+              viewport={{ once:true }}
+              transition={{ delay: i * .08 }}
+              whileHover={{ y:-4 }}
+            >
+              <div className="feat-icon" style={{ background: f.grad }}>
+                {f.icon}
+              </div>
+              <p className="feat-title">{f.title}</p>
+              <p className="feat-desc">{f.desc}</p>
+            </motion.div>
+          ))}
+        </div>
+
+        {/* mode pills showcase */}
+        <motion.div
+          style={{ marginTop:80, textAlign:"center" }}
+          initial={{ opacity:0 }} whileInView={{ opacity:1 }} viewport={{ once:true }}
+        >
+          <p style={{ color:"var(--muted)", fontSize:14, marginBottom:24, textTransform:"uppercase", letterSpacing:2, fontWeight:600 }}>Reply in any mood</p>
+          <div className="modes-row" style={{ justifyContent:"center" }}>
+            {[
+              { label:"💝 Romantic",  border:"rgba(236,72,153,.4)", color:"#EC4899", bg:"rgba(236,72,153,.1)" },
+              { label:"😂 Funny",     border:"rgba(245,158,11,.4)", color:"#F59E0B", bg:"rgba(245,158,11,.1)" },
+              { label:"🔥 Savage",    border:"rgba(239,68,68,.4)",  color:"#EF4444", bg:"rgba(239,68,68,.1)"  },
+              { label:"🫂 Emotional", border:"rgba(108,99,255,.4)", color:"#A78BFA", bg:"rgba(108,99,255,.1)" },
+            ].map(m => (
+              <div key={m.label} className="mode-pill" style={{ borderColor:m.border, color:m.color, background:m.bg }}>
+                {m.label}
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      </div>
+    </section>
+  );
+}
+
+// ── SVG Arc Meter ────────────────────────────────────────────────────────────
+function ArcMeter({ value }) {
+  const r = 72, cx = 90, cy = 90, strokeW = 10;
+  const circumference = Math.PI * r;
+  const pct = Math.min(Math.max(value / 100, 0), 1);
+  const dash = pct * circumference;
+
+  const color = value >= 70 ? "#22D3EE" : value >= 40 ? "#A78BFA" : "#EF4444";
+  const label = value >= 75 ? "Very Interested 🔥" : value >= 50 ? "Kinda Interested 👀" : value >= 30 ? "Lukewarm 😐" : "Not That Into It 💀";
+
+  return (
+    <div>
+      <div className="interest-meter">
+        <svg width="180" height="100" viewBox="0 0 180 100">
+          <path
+            d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
+            fill="none" stroke="rgba(255,255,255,.07)" strokeWidth={strokeW} strokeLinecap="round"
+          />
+          <motion.path
+            d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
+            fill="none" stroke={color} strokeWidth={strokeW} strokeLinecap="round"
+            strokeDasharray={`${circumference} ${circumference}`}
+            initial={{ strokeDashoffset: circumference }}
+            animate={{ strokeDashoffset: circumference - dash }}
+            transition={{ duration:1.2, ease:"easeOut" }}
+          />
+          <text x="90" y="82" textAnchor="middle" fill={color} fontSize="24" fontWeight="700" fontFamily="Syne,sans-serif">
+            {value}%
+          </text>
+        </svg>
+      </div>
+      <p className="interest-label" style={{ color }}>{value}%</p>
+      <p className="interest-sub">{label}</p>
+    </div>
+  );
+}
+
+// ── Dashboard ────────────────────────────────────────────────────────────────
+function Dashboard() {
+  const [conversation, setConversation] = useState(MOCK_CONVERSATION);
+  const [mode, setMode] = useState("romantic");
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState(null);
+  const [copied, setCopied] = useState(false);
+
+  async function generate() {
+    if (!conversation.trim()) return;
+    setLoading(true);
+    setResult(null);
+
+    const systemPrompt = `You are ReplyBro, a witty AI relationship coach.
+Given a conversation and a reply mode, respond with ONLY valid JSON (no markdown, no backticks):
+{
+  "reply": "<the reply text>",
+  "mood": { "flirty": <0-100>, "playful": <0-100>, "tension": <0-100>, "warmth": <0-100> },
+  "interestLevel": <0-100>,
+  "signals": ["<signal 1>", "<signal 2>", "<signal 3>"]
+}
+
+Mode: ${mode.toUpperCase()}
+- romantic: warm, heartfelt, slightly flirty — makes them feel seen
+- funny: genuinely witty, lighthearted, maybe a little sarcastic
+- savage: direct, unbothered, ice cold — power move energy
+- emotional: empathetic, deep, real — shows you actually care`;
+
+    const userPrompt = `Conversation:\n${conversation}\n\nGenerate the perfect ${mode} reply.`;
+
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 600,
+          system: systemPrompt,
+          messages: [{ role: "user", content: userPrompt }],
+        }),
+      });
+      const data = await res.json();
+      const raw = data.content?.map(b => b.text || "").join("").trim();
+      const clean = raw.replace(/```json|```/g, "").trim();
+      const parsed = JSON.parse(clean);
+      setResult(parsed);
+    } catch {
+      setResult({
+        reply: "Couldn't generate a reply right now — try again in a sec! 😅",
+        mood: { flirty: 40, playful: 55, tension: 30, warmth: 60 },
+        interestLevel: 62,
+        signals: ["mixed signals", "casual tone", "testing the waters"],
+      });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function copyReply() {
+    if (result?.reply) {
+      navigator.clipboard.writeText(result.reply);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  }
+
+  const modeConfig = MODES.find(m => m.id === mode);
+
+  return (
+    <section className="dash" id="dashboard">
+      <Orbs />
+      <div style={{ position:"relative", zIndex:1 }}>
+        <div className="dash-header">
+          <div>
+            <motion.h2 className="dash-title font-syne" initial={{ opacity:0, x:-16 }} animate={{ opacity:1, x:0 }}>
+              AI Reply <span className="grad-text">Dashboard</span>
+            </motion.h2>
+            <p style={{ color:"var(--muted)", fontSize:14, marginTop:4 }}>Paste your chat · Pick a vibe · Get the reply</p>
+          </div>
+          <div style={{ display:"flex", gap:8 }}>
+            {MODES.map(m => (
+              <div key={m.id} style={{
+                width:10, height:10, borderRadius:"50%",
+                background: mode === m.id ? m.color : "rgba(255,255,255,.1)",
+                transition:"background .3s",
+              }} />
+            ))}
+          </div>
+        </div>
+
+        <div className="dash-grid">
+          {/* LEFT: input */}
+          <motion.div initial={{ opacity:0, y:24 }} animate={{ opacity:1, y:0 }} transition={{ delay:.1 }}>
+            <div className="glass-card" style={{ padding:"28px" }}>
+              <p style={{ fontSize:13, color:"var(--muted)", marginBottom:12, textTransform:"uppercase", letterSpacing:1.5, fontWeight:600 }}>Paste Conversation</p>
+              <div className="chat-input-wrap">
+                <textarea
+                  className="chat-textarea"
+                  value={conversation}
+                  onChange={e => setConversation(e.target.value)}
+                  placeholder="Paste your chat here...\n\nThem: hey stranger 👀\nMe: oh hey haha"
+                  rows={8}
+                />
+              </div>
+
+              <p style={{ fontSize:13, color:"var(--muted)", marginTop:24, marginBottom:12, textTransform:"uppercase", letterSpacing:1.5, fontWeight:600 }}>Reply Mode</p>
+              <div className="modes-grid">
+                {MODES.map(m => (
+                  <button
+                    key={m.id}
+                    className={`mode-btn ${mode === m.id ? "active" : ""}`}
+                    onClick={() => setMode(m.id)}
+                    style={mode === m.id ? { borderColor: m.color, boxShadow:`0 0 20px ${m.color}33` } : {}}
+                  >
+                    <span className="mode-icon">{m.icon}</span>
+                    <span style={mode===m.id ? {color:m.color} : {}}>{m.label}</span>
+                  </button>
+                ))}
+              </div>
+
+              <button
+                className="btn-generate"
+                onClick={generate}
+                disabled={loading || !conversation.trim()}
+                style={{ marginTop:8 }}
+              >
+                {loading ? (
+                  <>
+                    <div className="spinner" />
+                    Crafting reply...
+                  </>
+                ) : (
+                  <>✨ Generate {modeConfig.label} Reply</>
+                )}
+              </button>
+            </div>
+
+            {/* response */}
+            <AnimatePresence>
+              {loading && (
+                <motion.div
+                  key="typing"
+                  className="response-card"
+                  initial={{ opacity:0, y:16, scale:.98 }}
+                  animate={{ opacity:1, y:0, scale:1 }}
+                  exit={{ opacity:0, y:-8 }}
+                >
+                  <p className="response-label">AI is thinking...</p>
+                  <div style={{ display:"flex", gap:5, alignItems:"center" }}>
+                    <span className="typing-dot" />
+                    <span className="typing-dot" />
+                    <span className="typing-dot" />
+                  </div>
+                </motion.div>
+              )}
+
+              {result && !loading && (
+                <motion.div
+                  key="result"
+                  className="response-card"
+                  initial={{ opacity:0, y:20, scale:.97 }}
+                  animate={{ opacity:1, y:0, scale:1 }}
+                  transition={{ type:"spring", stiffness:300, damping:24 }}
+                >
+                  <p className="response-label">{modeConfig.icon} {modeConfig.label} Reply</p>
+                  <p className="response-text">"{result.reply}"</p>
+                  <div className="response-actions">
+                    <button className="action-btn" onClick={copyReply}>
+                      {copied ? "✅ Copied!" : "📋 Copy"}
+                    </button>
+                    <button className="action-btn" onClick={generate}>🔄 Regenerate</button>
+                    {MODES.filter(m=>m.id!==mode).map(m => (
+                      <button key={m.id} className="action-btn" onClick={() => { setMode(m.id); }}>
+                        {m.icon} Try {m.label}
+                      </button>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.div>
+
+          {/* RIGHT: sidebar */}
+          <motion.div initial={{ opacity:0, x:24 }} animate={{ opacity:1, x:0 }} transition={{ delay:.2 }}>
+            {/* mood card */}
+            <div className="side-card">
+              <p className="side-card-title">
+                <span className="side-dot" style={{ background:"#A78BFA" }} />
+                Mood Detection
+              </p>
+              {result ? (
+                <>
+                  {Object.entries(result.mood).map(([key, val]) => {
+                    const colors = { flirty:"#EC4899", playful:"#F59E0B", tension:"#EF4444", warmth:"#22D3EE" };
+                    return (
+                      <div key={key} className="mood-item">
+                        <span className="mood-label" style={{ textTransform:"capitalize" }}>{key}</span>
+                        <div className="mood-bar-bg">
+                          <motion.div
+                            className="mood-bar-fill"
+                            style={{ background: colors[key] || "#6C63FF" }}
+                            initial={{ width:0 }}
+                            animate={{ width:`${val}%` }}
+                            transition={{ duration:.9, ease:"easeOut" }}
+                          />
+                        </div>
+                        <span className="mood-val">{val}%</span>
+                      </div>
+                    );
+                  })}
+                </>
+              ) : (
+                <p style={{ color:"var(--muted2)", fontSize:14 }}>Generate a reply to see mood analysis...</p>
+              )}
+            </div>
+
+            {/* interest level */}
+            <div className="side-card">
+              <p className="side-card-title">
+                <span className="side-dot" style={{ background:"#22D3EE" }} />
+                Interest Level
+              </p>
+              {result ? (
+                <ArcMeter value={result.interestLevel} />
+              ) : (
+                <p style={{ color:"var(--muted2)", fontSize:14 }}>No analysis yet...</p>
+              )}
+            </div>
+
+            {/* signals */}
+            <div className="side-card">
+              <p className="side-card-title">
+                <span className="side-dot" style={{ background:"#F59E0B" }} />
+                Detected Signals
+              </p>
+              {result ? (
+                <div className="chips">
+                  {result.signals.map((s, i) => (
+                    <motion.span
+                      key={i} className="chip"
+                      initial={{ opacity:0, scale:.8 }}
+                      animate={{ opacity:1, scale:1 }}
+                      transition={{ delay: i * .1 }}
+                    >
+                      {s}
+                    </motion.span>
+                  ))}
+                </div>
+              ) : (
+                <p style={{ color:"var(--muted2)", fontSize:14 }}>Signals will appear here...</p>
+              )}
+            </div>
+
+            {/* pro banner */}
+            <div style={{
+              padding:"22px",
+              borderRadius:20,
+              background:"linear-gradient(135deg,rgba(108,99,255,.25),rgba(59,130,246,.15))",
+              border:"1px solid rgba(108,99,255,.35)",
+            }}>
+              <p style={{ fontSize:15, fontWeight:700, fontFamily:"Syne,sans-serif", marginBottom:6 }}>⚡ Go Pro</p>
+              <p style={{ fontSize:13, color:"var(--muted)", lineHeight:1.6, marginBottom:16 }}>
+                Unlock unlimited replies, relationship timelines, and voice-mode coaching.
+              </p>
+              <button className="btn-primary" style={{ width:"100%", borderRadius:10 }}>Upgrade for free →</button>
+            </div>
+          </motion.div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── Footer ───────────────────────────────────────────────────────────────────
+function Footer() {
+  return (
+    <footer className="footer">
+      <div>
+        <div className="nav-logo" style={{ marginBottom:8 }}>
+          <span style={{ background:"linear-gradient(135deg,#6C63FF,#22D3EE)", borderRadius:8, width:28, height:28, display:"flex", alignItems:"center", justifyContent:"center", fontSize:15 }}>💬</span>
+          <span className="font-syne grad-text" style={{ fontSize:18 }}>ReplyBro</span>
+        </div>
+        <p className="footer-copy">© 2025 ReplyBro. Made with 💜 for every texting situation.</p>
+      </div>
+      <div className="footer-links">
+        {["Privacy", "Terms", "Twitter", "Discord"].map(l => (
+          <a key={l} className="footer-link">{l}</a>
+        ))}
+      </div>
+    </footer>
+  );
+}
+
+// ── App Root ─────────────────────────────────────────────────────────────────
+export default function App() {
+  const [view, setView] = useState("landing"); // "landing" | "dashboard"
+  const dashRef = useRef(null);
+
+  useEffect(() => {
+    const style = document.createElement("style");
+    style.textContent = GLOBAL_CSS;
+    document.head.appendChild(style);
+    return () => document.head.removeChild(style);
+  }, []);
+
+  function goToDash() {
+    setView("dashboard");
+    setTimeout(() => dashRef.current?.scrollIntoView({ behavior:"smooth" }), 100);
+  }
+
+  return (
+    <div className="noise" style={{ minHeight:"100vh", background:"var(--bg0)" }}>
+      <Navbar onGoToDash={goToDash} />
+
+      <AnimatePresence mode="wait">
+        {view === "landing" ? (
+          <motion.div key="landing" initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }}>
+            <Hero onGoToDash={goToDash} />
+            <hr className="divider" />
+            <Features />
+            <hr className="divider" />
+            {/* CTA strip */}
+            <section style={{ padding:"100px 60px", textAlign:"center", position:"relative", overflow:"hidden" }}>
+              <Orbs />
+              <motion.div style={{ position:"relative", zIndex:1 }} initial={{ opacity:0, y:30 }} whileInView={{ opacity:1, y:0 }} viewport={{ once:true }}>
+                <h2 className="section-h2 font-syne" style={{ maxWidth:640, margin:"0 auto 20px" }}>
+                  Stop overthinking. Start <span className="grad-text">winning conversations.</span>
+                </h2>
+                <p style={{ color:"var(--muted)", marginBottom:36, fontSize:18, fontWeight:300 }}>
+                  Join thousands already using ReplyBro to level up their texting game.
+                </p>
+                <button className="btn-hero" onClick={goToDash}>
+                  🔥 Try ReplyBro Free
+                </button>
+              </motion.div>
+            </section>
+            <hr className="divider" />
+            <Footer />
+          </motion.div>
+        ) : (
+          <motion.div key="dash" initial={{ opacity:0, y:12 }} animate={{ opacity:1, y:0 }} exit={{ opacity:0 }} ref={dashRef}>
+            <Dashboard />
+            <hr className="divider" />
+            <Footer />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
