@@ -6,7 +6,11 @@ import { eq } from "drizzle-orm";
 const router = Router();
 
 router.post("/replybro/generate", async (req, res) => {
-  const { conversation, mode } = req.body as { conversation: string; mode: string };
+  const { conversation, mode, lang = "english" } = req.body as {
+    conversation: string;
+    mode: string;
+    lang?: string;
+  };
 
   if (!conversation || !mode) {
     res.status(400).json({ error: "conversation and mode are required" });
@@ -19,56 +23,30 @@ router.post("/replybro/generate", async (req, res) => {
     return;
   }
 
-  const modeInstructions: Record<string, string> = {
-    romantic: "Write a warm, charming, flirty reply that shows genuine interest and creates emotional connection. Be sweet, sincere, and slightly playful.",
-    funny: "Write a witty, humorous reply with good timing. Use light humor, wordplay, or a clever observation that makes them smile or laugh.",
-    savage: "Write a confident, bold, slightly edgy reply. Be direct, a little provocative, but still cool and controlled — not mean.",
-    emotional: "Write a deeply empathetic, thoughtful reply that shows you truly understand their feelings. Be sincere, vulnerable, and emotionally intelligent.",
-  };
+  const system = `You are ReplyBro, a witty AI relationship coach. Respond ONLY with valid JSON, no markdown:
+{"variants":["<reply 1>","<reply 2>","<reply 3>"],"mood":{"flirty":<0-100>,"playful":<0-100>,"tension":<0-100>,"warmth":<0-100>},"interestLevel":<0-100>,"signals":["<s1>","<s2>","<s3>"]}
+Mode: ${mode} (romantic=warm heartfelt flirty; funny=witty sarcastic; savage=ice cold power move; emotional=empathetic deep).
+Language for ALL 3 variants: ${lang}.`;
 
-  const systemPrompt = `You are ReplyBro, an expert at crafting perfect text message replies. Analyze the conversation and generate a ${mode} reply.
-
-You must respond in valid JSON format with this exact structure:
-{
-  "reply": "the perfect reply text",
-  "moodScores": {
-    "romantic": <0-100>,
-    "funny": <0-100>,
-    "savage": <0-100>,
-    "emotional": <0-100>
-  },
-  "interestLevel": <0-100>,
-  "signals": ["signal1", "signal2", "signal3"]
-}
-
-The moodScores represent the mood detected in THEIR messages (not your reply).
-The interestLevel is how interested they seem in you (0=not at all, 100=very interested).
-The signals are 3-5 short observations about the conversation dynamic (e.g. "Uses ellipsis showing hesitation", "Short replies indicate coolness", "Asked about your plans").
-
-Reply mode: ${modeInstructions[mode]}`;
+  const user = `Conversation:\n${conversation}\n\nGenerate 3 ${mode} reply variants in ${lang}.`;
 
   try {
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
-      max_tokens: 8192,
-      messages: [
-        {
-          role: "user",
-          content: `Here is the conversation:\n\n${conversation}\n\nGenerate a ${mode} reply.`,
-        },
-      ],
-      system: systemPrompt,
+      max_tokens: 1024,
+      messages: [{ role: "user", content: user }],
+      system,
     });
 
     const block = message.content[0];
     if (block.type !== "text") {
-      res.status(500).json({ error: "Unexpected response type from AI" });
+      res.status(500).json({ error: "Unexpected response type" });
       return;
     }
 
     let parsed: {
-      reply: string;
-      moodScores: { romantic: number; funny: number; savage: number; emotional: number };
+      variants: string[];
+      mood: { flirty: number; playful: number; tension: number; warmth: number };
       interestLevel: number;
       signals: string[];
     };
@@ -81,11 +59,10 @@ Reply mode: ${modeInstructions[mode]}`;
       return;
     }
 
-    const snippet = conversation.slice(0, 200);
     await db.insert(replyHistoryTable).values({
-      conversationSnippet: snippet,
+      conversationSnippet: conversation.slice(0, 200),
       mode,
-      reply: parsed.reply,
+      reply: parsed.variants[0] ?? "",
       interestLevel: Math.round(parsed.interestLevel),
     });
 
@@ -93,6 +70,79 @@ Reply mode: ${modeInstructions[mode]}`;
   } catch (err) {
     req.log.error({ err }, "Error generating reply");
     res.status(500).json({ error: "Failed to generate reply" });
+  }
+});
+
+router.post("/replybro/rizz", async (req, res) => {
+  const { opener } = req.body as { opener: string };
+  if (!opener) {
+    res.status(400).json({ error: "opener is required" });
+    return;
+  }
+
+  const system = `You are a brutally honest rizz coach. Respond ONLY with valid JSON:
+{"score":<0-100>,"grade":"<S/A/B/C/D/F>","verdict":"<one punchy sentence>","pros":["<p1>","<p2>"],"cons":["<c1>","<c2>"],"improved":"<better version of the opener>"}`;
+
+  try {
+    const message = await anthropic.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 400,
+      messages: [{ role: "user", content: `Rate this opening line: "${opener}"` }],
+      system,
+    });
+
+    const block = message.content[0];
+    if (block.type !== "text") {
+      res.status(500).json({ error: "Unexpected response" });
+      return;
+    }
+
+    const jsonMatch = block.text.match(/\{[\s\S]*\}/);
+    const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : block.text);
+    res.json(parsed);
+  } catch (err) {
+    req.log.error({ err }, "Error scoring rizz");
+    res.status(500).json({ error: "Failed to score" });
+  }
+});
+
+router.post("/replybro/advice", async (req, res) => {
+  const { name, trend, note } = req.body as {
+    name: string;
+    trend: number[];
+    note?: string;
+  };
+
+  if (!name || !trend) {
+    res.status(400).json({ error: "name and trend are required" });
+    return;
+  }
+
+  const trendDir = trend[trend.length - 1] > trend[0] ? "increasing" : "decreasing";
+  const system = `You are a relationship coach. Respond ONLY with valid JSON:
+{"advice":"<2-3 sentence actionable advice>","nextMove":"<specific suggested action>","greenFlag":<true/false>}`;
+  const user = `Contact: ${name}. Interest trend: ${trendDir}. Data: ${trend.join(", ")}. Note: ${note || "none"}.`;
+
+  try {
+    const message = await anthropic.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 300,
+      messages: [{ role: "user", content: user }],
+      system,
+    });
+
+    const block = message.content[0];
+    if (block.type !== "text") {
+      res.status(500).json({ error: "Unexpected response" });
+      return;
+    }
+
+    const jsonMatch = block.text.match(/\{[\s\S]*\}/);
+    const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : block.text);
+    res.json(parsed);
+  } catch (err) {
+    req.log.error({ err }, "Error getting advice");
+    res.status(500).json({ error: "Failed to get advice" });
   }
 });
 

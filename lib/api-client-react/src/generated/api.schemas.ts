@@ -27,21 +27,49 @@ export interface GenerateReplyBody {
   conversation: string;
   /** The reply mode/tone */
   mode: GenerateReplyBodyMode;
+  /** Reply language (e.g. english, spanish, french) */
+  lang?: string;
 }
 
-export type GenerateReplyResponseMoodScores = {
-  romantic: number;
-  funny: number;
-  savage: number;
-  emotional: number;
+export type GenerateReplyResponseMood = {
+  flirty: number;
+  playful: number;
+  tension: number;
+  warmth: number;
 };
 
 export interface GenerateReplyResponse {
-  reply: string;
-  moodScores: GenerateReplyResponseMoodScores;
-  /** Percentage 0-100 */
+  /** Three reply variants */
+  variants: string[];
+  mood: GenerateReplyResponseMood;
+  /** Interest level 0-100 */
   interestLevel: number;
   signals: string[];
+}
+
+export interface RizzScoreBody {
+  opener: string;
+}
+
+export interface RizzScoreResponse {
+  score: number;
+  grade: string;
+  verdict: string;
+  pros: string[];
+  cons: string[];
+  improved: string;
+}
+
+export interface TrackerAdviceBody {
+  name: string;
+  trend: number[];
+  note?: string;
+}
+
+export interface TrackerAdviceResponse {
+  advice: string;
+  nextMove: string;
+  greenFlag: boolean;
 }
 
 export interface SavedReply {

@@ -16,25 +16,62 @@ export const HealthCheckResponse = zod.object({
 });
 
 /**
- * @summary Generate an AI reply with mood analysis
+ * @summary Generate AI reply variants with mood analysis
  */
+export const generateReplyBodyLangDefault = `english`;
+
 export const GenerateReplyBody = zod.object({
   conversation: zod.string().describe("The conversation text to analyze"),
   mode: zod
     .enum(["romantic", "funny", "savage", "emotional"])
     .describe("The reply mode\/tone"),
+  lang: zod
+    .string()
+    .default(generateReplyBodyLangDefault)
+    .describe("Reply language (e.g. english, spanish, french)"),
 });
 
 export const GenerateReplyResponse = zod.object({
-  reply: zod.string(),
-  moodScores: zod.object({
-    romantic: zod.number(),
-    funny: zod.number(),
-    savage: zod.number(),
-    emotional: zod.number(),
+  variants: zod.array(zod.string()).describe("Three reply variants"),
+  mood: zod.object({
+    flirty: zod.number(),
+    playful: zod.number(),
+    tension: zod.number(),
+    warmth: zod.number(),
   }),
-  interestLevel: zod.number().describe("Percentage 0-100"),
+  interestLevel: zod.number().describe("Interest level 0-100"),
   signals: zod.array(zod.string()),
+});
+
+/**
+ * @summary Score a rizz opening line
+ */
+export const ScoreRizzBody = zod.object({
+  opener: zod.string(),
+});
+
+export const ScoreRizzResponse = zod.object({
+  score: zod.number(),
+  grade: zod.string(),
+  verdict: zod.string(),
+  pros: zod.array(zod.string()),
+  cons: zod.array(zod.string()),
+  improved: zod.string(),
+});
+
+/**
+ * @summary Get AI coaching for relationship tracker
+ */
+export const GetTrackerAdviceBody = zod.object({
+  name: zod.string(),
+  trend: zod.array(zod.number()),
+  note: zod.string().optional(),
+});
+
+export const GetTrackerAdviceResponse = zod.object({
+  advice: zod.string(),
+  nextMove: zod.string(),
+  greenFlag: zod.boolean(),
 });
 
 /**

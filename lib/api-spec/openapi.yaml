@@ -33,7 +33,7 @@ paths:
     post:
       operationId: generateReply
       tags: [replybro]
-      summary: Generate an AI reply with mood analysis
+      summary: Generate AI reply variants with mood analysis
       requestBody:
         required: true
         content:
@@ -42,11 +42,49 @@ paths:
               $ref: "#/components/schemas/GenerateReplyBody"
       responses:
         "200":
-          description: Generated reply with mood analysis
+          description: Generated reply variants with mood analysis
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/GenerateReplyResponse"
+
+  /replybro/rizz:
+    post:
+      operationId: scoreRizz
+      tags: [replybro]
+      summary: Score a rizz opening line
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RizzScoreBody"
+      responses:
+        "200":
+          description: Rizz score result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RizzScoreResponse"
+
+  /replybro/advice:
+    post:
+      operationId: getTrackerAdvice
+      tags: [replybro]
+      summary: Get AI coaching for relationship tracker
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrackerAdviceBody"
+      responses:
+        "200":
+          description: AI relationship advice
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrackerAdviceResponse"
 
   /replybro/history:
     get:
@@ -222,6 +260,10 @@ components:
           type: string
           enum: [romantic, funny, savage, emotional]
           description: The reply mode/tone
+        lang:
+          type: string
+          description: Reply language (e.g. english, spanish, french)
+          default: english
       required:
         - conversation
         - mode
@@ -229,32 +271,88 @@ components:
     GenerateReplyResponse:
       type: object
       properties:
-        reply:
-          type: string
-        moodScores:
+        variants:
+          type: array
+          items:
+            type: string
+          description: Three reply variants
+        mood:
           type: object
           properties:
-            romantic:
-              type: number
-            funny:
-              type: number
-            savage:
-              type: number
-            emotional:
-              type: number
-          required: [romantic, funny, savage, emotional]
+            flirty:
+              type: integer
+            playful:
+              type: integer
+            tension:
+              type: integer
+            warmth:
+              type: integer
+          required: [flirty, playful, tension, warmth]
         interestLevel:
-          type: number
-          description: Percentage 0-100
+          type: integer
+          description: Interest level 0-100
         signals:
           type: array
           items:
             type: string
       required:
-        - reply
-        - moodScores
+        - variants
+        - mood
         - interestLevel
         - signals
+
+    RizzScoreBody:
+      type: object
+      properties:
+        opener:
+          type: string
+      required:
+        - opener
+
+    RizzScoreResponse:
+      type: object
+      properties:
+        score:
+          type: integer
+        grade:
+          type: string
+        verdict:
+          type: string
+        pros:
+          type: array
+          items:
+            type: string
+        cons:
+          type: array
+          items:
+            type: string
+        improved:
+          type: string
+      required: [score, grade, verdict, pros, cons, improved]
+
+    TrackerAdviceBody:
+      type: object
+      properties:
+        name:
+          type: string
+        trend:
+          type: array
+          items:
+            type: integer
+        note:
+          type: string
+      required: [name, trend]
+
+    TrackerAdviceResponse:
+      type: object
+      properties:
+        advice:
+          type: string
+        nextMove:
+          type: string
+        greenFlag:
+          type: boolean
+      required: [advice, nextMove, greenFlag]
 
     SavedReply:
       type: object
@@ -268,7 +366,7 @@ components:
         reply:
           type: string
         interestLevel:
-          type: number
+          type: integer
         createdAt:
           type: string
           format: date-time

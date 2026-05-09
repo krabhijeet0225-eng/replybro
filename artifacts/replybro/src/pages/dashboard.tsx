@@ -1,236 +1,346 @@
 import { useState } from "react";
-import { Layout } from "@/components/layout";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  useGenerateReply, 
-  useListReplyHistory, 
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  useGenerateReply,
+  useListReplyHistory,
   useDeleteReplyHistory,
   getListReplyHistoryQueryKey,
-  GenerateReplyBodyMode
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
-import { Loader2, Send, Trash2, Zap, Heart, Flame, Smile, Frown, MessageCircle } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+
+const MOCK_CONV = `Them: hey, you coming to jake's party saturday?
+Me: maybe idk still deciding
+Them: oh okay... no worries
+Me: why do you ask
+Them: just wanted to know if i'd see you there ig`;
 
 const MODES = [
-  { id: "romantic", label: "Romantic", icon: Heart, color: "text-pink-500", bg: "bg-pink-500/10", border: "border-pink-500/20", activeBorder: "border-pink-500" },
-  { id: "funny", label: "Funny", icon: Smile, color: "text-amber-500", bg: "bg-amber-500/10", border: "border-amber-500/20", activeBorder: "border-amber-500" },
-  { id: "savage", label: "Savage", icon: Flame, color: "text-red-500", bg: "bg-red-500/10", border: "border-red-500/20", activeBorder: "border-red-500" },
-  { id: "emotional", label: "Emotional", icon: Frown, color: "text-indigo-400", bg: "bg-indigo-400/10", border: "border-indigo-400/20", activeBorder: "border-indigo-400" }
+  { id:"romantic",  label:"Romantic",  icon:"💝", color:"#EC4899" },
+  { id:"funny",     label:"Funny",     icon:"😂", color:"#F59E0B" },
+  { id:"savage",    label:"Savage",    icon:"🔥", color:"#EF4444" },
+  { id:"emotional", label:"Emotional", icon:"🫂", color:"#6C63FF" },
 ] as const;
 
+const LANGUAGES = [
+  { id:"english",    label:"🇺🇸 English"  },
+  { id:"spanish",    label:"🇪🇸 Spanish"  },
+  { id:"french",     label:"🇫🇷 French"   },
+  { id:"hindi",      label:"🇮🇳 Hindi"    },
+  { id:"japanese",   label:"🇯🇵 Japanese" },
+  { id:"portuguese", label:"🇧🇷 Portug."  },
+];
+
+type ModeId = typeof MODES[number]["id"];
+
+type GenerateResult = {
+  variants: string[];
+  mood: { flirty: number; playful: number; tension: number; warmth: number };
+  interestLevel: number;
+  signals: string[];
+};
+
+type RizzResult = {
+  score: number;
+  grade: string;
+  verdict: string;
+  pros: string[];
+  cons: string[];
+  improved: string;
+};
+
+function Orbs() {
+  return (
+    <>
+      <div className="orb" style={{width:500,height:500,top:-200,left:-100,background:"rgba(108,99,255,.15)"}}/>
+      <div className="orb" style={{width:400,height:400,bottom:0,right:-100,background:"rgba(59,130,246,.1)"}}/>
+    </>
+  );
+}
+
+function ArcMeter({ value }: { value: number }) {
+  const r=70,cx=90,cy=88,sw=9,circ=Math.PI*r;
+  const color = value>=70?"#22D3EE":value>=40?"#A78BFA":"#EF4444";
+  const label = value>=75?"Very Interested 🔥":value>=50?"Kinda Interested 👀":value>=30?"Lukewarm 😐":"Not That Into It 💀";
+  return (
+    <div>
+      <div style={{display:"flex",justifyContent:"center",padding:"6px 0 0"}}>
+        <svg width="180" height="96" viewBox="0 0 180 96">
+          <path d={`M ${cx-r} ${cy} A ${r} ${r} 0 0 1 ${cx+r} ${cy}`} fill="none" stroke="rgba(255,255,255,.07)" strokeWidth={sw} strokeLinecap="round"/>
+          <motion.path d={`M ${cx-r} ${cy} A ${r} ${r} 0 0 1 ${cx+r} ${cy}`} fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round"
+            strokeDasharray={`${circ} ${circ}`}
+            initial={{strokeDashoffset:circ}} animate={{strokeDashoffset:circ-(value/100)*circ}}
+            transition={{duration:1.2,ease:"easeOut"}}/>
+          <text x="90" y="80" textAnchor="middle" fill={color} fontSize="22" fontWeight="700" fontFamily="Syne,sans-serif">{value}%</text>
+        </svg>
+      </div>
+      <p style={{textAlign:"center",fontFamily:"Syne,sans-serif",fontSize:18,fontWeight:700,color,marginTop:4}}>{value}%</p>
+      <p style={{textAlign:"center",fontSize:13,color:"var(--muted)",marginTop:3}}>{label}</p>
+    </div>
+  );
+}
+
 export default function Dashboard() {
-  const [conversation, setConversation] = useState("");
-  const [selectedMode, setSelectedMode] = useState<GenerateReplyBodyMode>("funny");
-  const { toast } = useToast();
+  const [tab, setTab]         = useState<"generate"|"rizz">("generate");
+  const [conv, setConv]       = useState(MOCK_CONV);
+  const [mode, setMode]       = useState<ModeId>("romantic");
+  const [lang, setLang]       = useState("english");
+  const [selV, setSelV]       = useState(0);
+  const [copied, setCopied]   = useState(false);
+  const [speaking, setSpeaking] = useState(false);
+  const [opener, setOpener]   = useState("");
+
   const queryClient = useQueryClient();
 
-  const { mutate: generateReply, isPending, data: response } = useGenerateReply({
+  const { mutate: generateReply, isPending, data: result } = useGenerateReply({
     mutation: {
       onSuccess: () => {
+        setSelV(0);
         queryClient.invalidateQueries({ queryKey: getListReplyHistoryQueryKey() });
-        toast({ title: "Reply Generated!" });
       },
-      onError: (err) => {
-        toast({ title: "Failed to generate", description: "Please try again later.", variant: "destructive" });
-      }
-    }
+    },
+  }) as { mutate: Function; isPending: boolean; data: GenerateResult | undefined };
+
+  const { mutate: scoreRizz, isPending: rLoad, data: rResult } = useMutation({
+    mutationFn: async (o: string): Promise<RizzResult> => {
+      const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+      const res = await fetch(`${base}/api/replybro/rizz`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ opener: o }),
+      });
+      return res.json();
+    },
   });
 
   const { data: history = [] } = useListReplyHistory({ query: { queryKey: getListReplyHistoryQueryKey() } });
-  const { mutate: deleteHistory } = useDeleteReplyHistory({
-    mutation: {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getListReplyHistoryQueryKey() });
-      }
-    }
+  const { mutate: deleteItem } = useDeleteReplyHistory({
+    mutation: { onSuccess: () => queryClient.invalidateQueries({ queryKey: getListReplyHistoryQueryKey() }) },
   });
 
-  const handleGenerate = () => {
-    if (!conversation.trim()) {
-      toast({ title: "Wait up!", description: "Paste a conversation first.", variant: "destructive" });
-      return;
+  function copy() {
+    if (result?.variants?.[selV]) {
+      navigator.clipboard.writeText(result.variants[selV]);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
     }
-    generateReply({ data: { conversation, mode: selectedMode } });
-  };
+  }
+
+  function speak() {
+    if (!result?.variants?.[selV]) return;
+    if (speaking) { window.speechSynthesis.cancel(); setSpeaking(false); return; }
+    const utt = new SpeechSynthesisUtterance(result.variants[selV]);
+    utt.rate=.95; utt.pitch=1.05;
+    utt.onend = () => setSpeaking(false);
+    setSpeaking(true);
+    window.speechSynthesis.speak(utt);
+  }
+
+  const rc = rResult ? (rResult.score>=80?"#22D3EE":rResult.score>=60?"#A78BFA":rResult.score>=40?"#F59E0B":"#EF4444") : "#6C63FF";
 
   return (
-    <Layout>
-      <div className="max-w-7xl mx-auto px-6 py-12 grid grid-cols-1 lg:grid-cols-12 gap-8 relative z-10">
-        
-        {/* Main Generator Area */}
-        <div className="lg:col-span-8 space-y-8">
-          <div className="glass-card rounded-3xl p-6 md:p-8">
-            <h2 className="text-2xl font-bold mb-6 font-serif">What did they say?</h2>
-            <textarea 
-              value={conversation}
-              onChange={(e) => setConversation(e.target.value)}
-              placeholder="Paste their text message here..."
-              className="w-full h-40 bg-white/5 border border-white/10 rounded-2xl p-5 text-lg text-white placeholder:text-white/20 focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none transition-all"
-            />
-            
-            <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-widest mt-8 mb-4">Choose the Vibe</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              {MODES.map((mode) => (
-                <button
-                  key={mode.id}
-                  onClick={() => setSelectedMode(mode.id as GenerateReplyBodyMode)}
-                  className={`relative flex flex-col items-center justify-center p-4 rounded-2xl border transition-all ${
-                    selectedMode === mode.id 
-                      ? `${mode.bg} ${mode.activeBorder} shadow-[0_0_20px_rgba(255,255,255,0.1)]` 
-                      : `bg-white/5 ${mode.border} hover:bg-white/10`
-                  }`}
-                >
-                  <mode.icon className={`w-6 h-6 mb-2 ${mode.color}`} />
-                  <span className={`text-sm font-semibold ${selectedMode === mode.id ? "text-white" : "text-muted-foreground"}`}>
-                    {mode.label}
-                  </span>
-                  {selectedMode === mode.id && (
-                    <motion.div layoutId="activeMode" className="absolute inset-0 rounded-2xl border-2 border-current opacity-30 pointer-events-none" style={{ color: mode.color }} />
-                  )}
-                </button>
-              ))}
-            </div>
+    <section className="dash">
+      <Orbs/>
+      <div style={{position:"relative",zIndex:1}}>
+        <h2 className="font-syne" style={{fontSize:"clamp(22px,3vw,34px)",fontWeight:700,marginBottom:4}}>
+          AI Reply <span className="grad-text">Dashboard</span>
+        </h2>
+        <p style={{color:"var(--muted)",fontSize:14,marginBottom:20}}>Paste your chat · Pick a vibe · Get the perfect reply</p>
 
-            <button 
-              onClick={handleGenerate}
-              disabled={isPending}
-              className="w-full mt-8 py-5 rounded-2xl bg-gradient-primary text-white font-bold text-lg flex items-center justify-center gap-2 hover:shadow-[0_0_30px_rgba(108,99,255,0.4)] transition-all disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden"
-            >
-              {isPending ? (
-                <>
-                  <Loader2 className="w-6 h-6 animate-spin" />
-                  Analyzing context...
-                </>
-              ) : (
-                <>
-                  <Zap className="w-6 h-6" />
-                  Generate Perfect Reply
-                </>
-              )}
-              {isPending && <div className="absolute inset-0 bg-white/20 animate-pulse" />}
-            </button>
-          </div>
+        <div className="tabs">
+          {([["generate","✨ Generate Reply"],["rizz","🎯 Rizz Score"]] as const).map(([id,label]) => (
+            <button key={id} className={`tab-btn ${tab===id?"active":""}`} onClick={() => setTab(id)}>{label}</button>
+          ))}
+        </div>
 
-          <AnimatePresence mode="popLayout">
-            {response && (
-              <motion.div 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                className="glass-card rounded-3xl p-6 md:p-8 border-primary/30 relative overflow-hidden"
-              >
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-primary" />
-                
-                <div className="flex flex-col md:flex-row gap-8">
-                  <div className="flex-1">
-                    <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-widest mb-4 flex items-center gap-2">
-                      <Zap className="w-4 h-4 text-primary" /> Suggested Reply
-                    </h3>
-                    <div className="bg-white/5 p-6 rounded-2xl border border-white/10 text-xl font-medium leading-relaxed">
-                      "{response.reply}"
-                    </div>
-                    
-                    <div className="mt-6 flex flex-wrap gap-2">
-                      {response.signals.map((sig, i) => (
-                        <span key={i} className="px-3 py-1 bg-white/5 border border-white/10 rounded-full text-xs font-medium text-white/70">
-                          {sig}
-                        </span>
+        <div className="dash-grid">
+          {/* ── Main column ── */}
+          <div>
+            <AnimatePresence mode="wait">
+              {tab==="generate" && (
+                <motion.div key="gen" initial={{opacity:0,x:-10}} animate={{opacity:1,x:0}} exit={{opacity:0,x:10}}>
+                  <div className="glass-card" style={{padding:24,marginBottom:20}}>
+                    <p style={{fontSize:12,color:"var(--muted)",letterSpacing:2,textTransform:"uppercase",fontWeight:600,marginBottom:10}}>Their message</p>
+                    <textarea
+                      className="chat-textarea"
+                      value={conv}
+                      onChange={e => setConv(e.target.value)}
+                      placeholder="Paste their texts here..."
+                    />
+
+                    <p style={{fontSize:12,color:"var(--muted)",letterSpacing:2,textTransform:"uppercase",fontWeight:600,margin:"18px 0 4px"}}>Pick a vibe</p>
+                    <div className="modes-grid">
+                      {MODES.map(m => (
+                        <button key={m.id} className={`mode-btn ${mode===m.id?"active":""}`} onClick={() => setMode(m.id)}
+                          style={mode===m.id?{borderColor:m.color,background:`${m.color}22`,color:"var(--text)"}:{}}>
+                          <span style={{fontSize:20}}>{m.icon}</span>
+                          {m.label}
+                        </button>
                       ))}
                     </div>
-                  </div>
-                  
-                  <div className="w-full md:w-64 space-y-6">
-                    <div>
-                      <h4 className="text-sm font-bold text-muted-foreground uppercase tracking-widest mb-2">Interest Level</h4>
-                      <div className="flex items-end gap-2">
-                        <span className={`text-5xl font-black ${response.interestLevel > 70 ? 'text-green-400' : response.interestLevel > 40 ? 'text-amber-400' : 'text-red-400'}`}>
-                          {response.interestLevel}%
-                        </span>
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-3">
-                      <h4 className="text-sm font-bold text-muted-foreground uppercase tracking-widest mb-2">Mood Analysis</h4>
-                      {Object.entries(response.moodScores).map(([key, value]) => {
-                        const modeConfig = MODES.find(m => m.id === key);
-                        return (
-                          <div key={key} className="space-y-1.5">
-                            <div className="flex justify-between text-xs font-medium text-white/60 capitalize">
-                              <span>{key}</span>
-                              <span>{value}%</span>
-                            </div>
-                            <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden">
-                              <motion.div 
-                                initial={{ width: 0 }}
-                                animate={{ width: `${value}%` }}
-                                className={`h-full rounded-full ${modeConfig?.bg.replace('/10', '') || 'bg-primary'}`}
-                              />
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
 
-        {/* Sidebar History */}
-        <div className="lg:col-span-4">
-          <div className="glass-panel rounded-3xl p-6 h-full min-h-[600px] flex flex-col">
-            <h3 className="text-lg font-bold font-serif mb-6 flex items-center gap-2">
-              <MessageCircle className="w-5 h-5 text-primary" /> History
-            </h3>
-            
-            <div className="flex-1 overflow-y-auto pr-2 space-y-4">
-              {history.length === 0 ? (
-                <div className="text-center text-muted-foreground py-10">
-                  <p>No replies generated yet.</p>
-                </div>
-              ) : (
-                history.map((item) => {
-                  const modeConfig = MODES.find(m => m.id === item.mode) || MODES[0];
-                  return (
-                    <motion.div 
-                      key={item.id} 
-                      layout
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, scale: 0.9 }}
-                      className="bg-white/5 border border-white/5 p-4 rounded-2xl group hover:border-white/20 transition-all"
-                    >
-                      <div className="flex justify-between items-start mb-2">
-                        <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${modeConfig.bg} ${modeConfig.color}`}>
-                          {item.mode}
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <span className={`text-xs font-bold ${item.interestLevel > 70 ? 'text-green-400' : item.interestLevel > 40 ? 'text-amber-400' : 'text-red-400'}`}>
-                            {item.interestLevel}% interest
-                          </span>
-                          <button 
-                            onClick={() => deleteHistory({ id: item.id })}
-                            className="text-white/20 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                          >
-                            <Trash2 className="w-4 h-4" />
+                    <p style={{fontSize:12,color:"var(--muted)",letterSpacing:2,textTransform:"uppercase",fontWeight:600,margin:"16px 0 4px"}}>Language</p>
+                    <div className="lang-grid">
+                      {LANGUAGES.map(l => (
+                        <button key={l.id} className={`lang-btn ${lang===l.id?"active":""}`} onClick={() => setLang(l.id)}>{l.label}</button>
+                      ))}
+                    </div>
+
+                    <button className="btn-generate" disabled={isPending} onClick={() => {
+                      if (!conv.trim()) return;
+                      (generateReply as Function)({ data: { conversation: conv, mode, lang } });
+                    }}>
+                      {isPending ? <><div className="spinner"/> Analyzing...</> : <>✨ Generate Reply</>}
+                    </button>
+                  </div>
+
+                  <AnimatePresence>
+                    {result && (
+                      <motion.div initial={{opacity:0,y:16}} animate={{opacity:1,y:0}} exit={{opacity:0}}>
+                        {/* Variant cards */}
+                        <p style={{fontSize:12,color:"var(--muted)",letterSpacing:2,textTransform:"uppercase",fontWeight:600,marginBottom:12}}>Pick your reply</p>
+                        {result.variants.map((v, i) => (
+                          <div key={i} className={`variant-card ${selV===i?"selected":""}`} onClick={() => setSelV(i)}>
+                            <p style={{fontSize:12,color:"var(--muted)",marginBottom:6}}>Option {i+1}</p>
+                            <p style={{fontSize:15,lineHeight:1.6,color:"var(--text)"}}>{v}</p>
+                          </div>
+                        ))}
+
+                        {/* Actions */}
+                        <div className="response-actions">
+                          <button className="action-btn" onClick={copy}>{copied?"✓ Copied!":"📋 Copy"}</button>
+                          <button className={`voice-btn ${speaking?"speaking":""}`} onClick={speak}>
+                            🔊 {speaking?"Stop":"Hear it"}
                           </button>
                         </div>
+
+                        {/* Signals */}
+                        {result.signals?.length > 0 && (
+                          <div style={{marginTop:16}}>
+                            <p style={{fontSize:12,color:"var(--muted)",letterSpacing:2,textTransform:"uppercase",fontWeight:600,marginBottom:8}}>Conversation signals</p>
+                            <div className="chips">
+                              {result.signals.map((s,i) => <span key={i} className="chip">{s}</span>)}
+                            </div>
+                          </div>
+                        )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
+              )}
+
+              {tab==="rizz" && (
+                <motion.div key="rizz" initial={{opacity:0,x:10}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-10}}>
+                  <div className="glass-card" style={{padding:24,marginBottom:20}}>
+                    <p style={{fontSize:12,color:"var(--muted)",letterSpacing:2,textTransform:"uppercase",fontWeight:600,marginBottom:10}}>Your opening line</p>
+                    <input
+                      className="text-input"
+                      placeholder="e.g. 'hey, you look like trouble 😏'"
+                      value={opener}
+                      onChange={e => setOpener(e.target.value)}
+                      onKeyDown={e => e.key==="Enter" && opener.trim() && scoreRizz(opener)}
+                    />
+                    <button className="btn-generate" disabled={rLoad} style={{marginTop:12}} onClick={() => opener.trim() && scoreRizz(opener)}>
+                      {rLoad ? <><div className="spinner"/> Analyzing rizz...</> : <>🎯 Score My Rizz</>}
+                    </button>
+                  </div>
+
+                  <AnimatePresence>
+                    {rResult && (
+                      <motion.div initial={{opacity:0,y:16}} animate={{opacity:1,y:0}} exit={{opacity:0}}>
+                        <div className="glass-card" style={{padding:24}}>
+                          {/* Score circle */}
+                          <div style={{display:"flex",alignItems:"center",gap:24,marginBottom:20,flexWrap:"wrap"}}>
+                            <div style={{textAlign:"center"}}>
+                              <div style={{width:90,height:90,borderRadius:"50%",border:`3px solid ${rc}`,display:"flex",alignItems:"center",justifyContent:"center",background:`${rc}15`}}>
+                                <span style={{fontSize:28,fontWeight:800,color:rc,fontFamily:"Syne,sans-serif"}}>{rResult.score}</span>
+                              </div>
+                              <p style={{fontSize:22,fontWeight:800,color:rc,fontFamily:"Syne,sans-serif",marginTop:6}}>{rResult.grade}</p>
+                            </div>
+                            <div style={{flex:1}}>
+                              <p style={{fontSize:18,fontWeight:600,color:"var(--text)",marginBottom:8,fontFamily:"Syne,sans-serif"}}>{rResult.verdict}</p>
+                            </div>
+                          </div>
+
+                          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:16}}>
+                            <div style={{background:"rgba(34,197,94,.08)",border:"1px solid rgba(34,197,94,.2)",borderRadius:12,padding:14}}>
+                              <p style={{fontSize:11,color:"#4ade80",fontWeight:600,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>✓ What works</p>
+                              {rResult.pros.map((p,i) => <p key={i} style={{fontSize:13,color:"var(--muted)",marginBottom:4}}>• {p}</p>)}
+                            </div>
+                            <div style={{background:"rgba(239,68,68,.08)",border:"1px solid rgba(239,68,68,.2)",borderRadius:12,padding:14}}>
+                              <p style={{fontSize:11,color:"#f87171",fontWeight:600,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>✗ What misses</p>
+                              {rResult.cons.map((c,i) => <p key={i} style={{fontSize:13,color:"var(--muted)",marginBottom:4}}>• {c}</p>)}
+                            </div>
+                          </div>
+
+                          <div style={{background:"rgba(108,99,255,.1)",border:"1px solid rgba(108,99,255,.3)",borderRadius:12,padding:14}}>
+                            <p style={{fontSize:11,color:"var(--violet)",fontWeight:600,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>✨ Upgraded version</p>
+                            <p style={{fontSize:15,color:"var(--text)",fontStyle:"italic"}}>"{rResult.improved}"</p>
+                            <button className="action-btn" style={{marginTop:10}} onClick={() => navigator.clipboard.writeText(rResult.improved)}>📋 Copy improved</button>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* ── Sidebar ── */}
+          <div>
+            {/* Interest meter */}
+            {result && (
+              <div className="side-card" style={{marginBottom:18}}>
+                <p className="side-card-title"><span className="side-dot" style={{background:"#22D3EE"}}/> Interest Level</p>
+                <ArcMeter value={result.interestLevel}/>
+              </div>
+            )}
+
+            {/* Mood breakdown */}
+            {result && (
+              <div className="side-card" style={{marginBottom:18}}>
+                <p className="side-card-title"><span className="side-dot" style={{background:"#A78BFA"}}/> Mood Analysis</p>
+                {Object.entries(result.mood).map(([key, val]) => {
+                  const colors: Record<string,string> = {flirty:"#EC4899",playful:"#F59E0B",tension:"#EF4444",warmth:"#22D3EE"};
+                  return (
+                    <div key={key} className="mood-item">
+                      <span className="mood-label">{key}</span>
+                      <div className="mood-bar-bg">
+                        <motion.div className="mood-bar-fill" initial={{width:0}} animate={{width:`${val}%`}} transition={{duration:.8,ease:"easeOut"}}
+                          style={{background:colors[key]||"var(--indigo)"}}/>
                       </div>
-                      <p className="text-sm text-white/60 line-clamp-2 mb-3">"{item.conversationSnippet}"</p>
-                      <div className="bg-black/20 p-3 rounded-xl border border-white/5">
-                        <p className="text-sm font-medium text-white line-clamp-3">"{item.reply}"</p>
-                      </div>
-                    </motion.div>
+                      <span className="mood-val">{val}</span>
+                    </div>
                   );
-                })
+                })}
+              </div>
+            )}
+
+            {/* History */}
+            <div className="side-card">
+              <p className="side-card-title"><span className="side-dot" style={{background:"var(--indigo)"}}/> Recent History</p>
+              {history.length === 0 ? (
+                <p style={{fontSize:13,color:"var(--muted2)",textAlign:"center",padding:"16px 0"}}>No replies yet</p>
+              ) : (
+                (history as any[]).slice(0,5).map((item: any) => (
+                  <motion.div key={item.id} layout initial={{opacity:0,x:10}} animate={{opacity:1,x:0}} className="hist-card" style={{marginBottom:10,position:"relative"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                      <span style={{fontSize:11,fontWeight:600,textTransform:"uppercase",letterSpacing:1,color:"var(--indigo)"}}>{item.mode}</span>
+                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                        <span style={{fontSize:12,color:item.interestLevel>=60?"#22D3EE":"#EF4444",fontWeight:700}}>{item.interestLevel}%</span>
+                        <button onClick={() => (deleteItem as Function)({ id: item.id })} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted2)",fontSize:14,lineHeight:1}}>×</button>
+                      </div>
+                    </div>
+                    <p style={{fontSize:13,color:"var(--muted)",lineHeight:1.5,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>
+                      "{item.reply}"
+                    </p>
+                  </motion.div>
+                ))
               )}
             </div>
           </div>
         </div>
-
       </div>
-    </Layout>
+    </section>
   );
 }

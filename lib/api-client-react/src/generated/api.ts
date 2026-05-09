@@ -26,8 +26,12 @@ import type {
   GenerateReplyBody,
   GenerateReplyResponse,
   HealthStatus,
+  RizzScoreBody,
+  RizzScoreResponse,
   SavedReply,
   SendAnthropicMessageBody,
+  TrackerAdviceBody,
+  TrackerAdviceResponse,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -116,7 +120,7 @@ export function useHealthCheck<
 }
 
 /**
- * @summary Generate an AI reply with mood analysis
+ * @summary Generate AI reply variants with mood analysis
  */
 export const getGenerateReplyUrl = () => {
   return `/api/replybro/generate`;
@@ -179,7 +183,7 @@ export type GenerateReplyMutationBody = BodyType<GenerateReplyBody>;
 export type GenerateReplyMutationError = ErrorType<unknown>;
 
 /**
- * @summary Generate an AI reply with mood analysis
+ * @summary Generate AI reply variants with mood analysis
  */
 export const useGenerateReply = <
   TError = ErrorType<unknown>,
@@ -199,6 +203,178 @@ export const useGenerateReply = <
   TContext
 > => {
   return useMutation(getGenerateReplyMutationOptions(options));
+};
+
+/**
+ * @summary Score a rizz opening line
+ */
+export const getScoreRizzUrl = () => {
+  return `/api/replybro/rizz`;
+};
+
+export const scoreRizz = async (
+  rizzScoreBody: RizzScoreBody,
+  options?: RequestInit,
+): Promise<RizzScoreResponse> => {
+  return customFetch<RizzScoreResponse>(getScoreRizzUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(rizzScoreBody),
+  });
+};
+
+export const getScoreRizzMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof scoreRizz>>,
+    TError,
+    { data: BodyType<RizzScoreBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof scoreRizz>>,
+  TError,
+  { data: BodyType<RizzScoreBody> },
+  TContext
+> => {
+  const mutationKey = ["scoreRizz"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof scoreRizz>>,
+    { data: BodyType<RizzScoreBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return scoreRizz(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ScoreRizzMutationResult = NonNullable<
+  Awaited<ReturnType<typeof scoreRizz>>
+>;
+export type ScoreRizzMutationBody = BodyType<RizzScoreBody>;
+export type ScoreRizzMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Score a rizz opening line
+ */
+export const useScoreRizz = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof scoreRizz>>,
+    TError,
+    { data: BodyType<RizzScoreBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof scoreRizz>>,
+  TError,
+  { data: BodyType<RizzScoreBody> },
+  TContext
+> => {
+  return useMutation(getScoreRizzMutationOptions(options));
+};
+
+/**
+ * @summary Get AI coaching for relationship tracker
+ */
+export const getGetTrackerAdviceUrl = () => {
+  return `/api/replybro/advice`;
+};
+
+export const getTrackerAdvice = async (
+  trackerAdviceBody: TrackerAdviceBody,
+  options?: RequestInit,
+): Promise<TrackerAdviceResponse> => {
+  return customFetch<TrackerAdviceResponse>(getGetTrackerAdviceUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(trackerAdviceBody),
+  });
+};
+
+export const getGetTrackerAdviceMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof getTrackerAdvice>>,
+    TError,
+    { data: BodyType<TrackerAdviceBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof getTrackerAdvice>>,
+  TError,
+  { data: BodyType<TrackerAdviceBody> },
+  TContext
+> => {
+  const mutationKey = ["getTrackerAdvice"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof getTrackerAdvice>>,
+    { data: BodyType<TrackerAdviceBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return getTrackerAdvice(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type GetTrackerAdviceMutationResult = NonNullable<
+  Awaited<ReturnType<typeof getTrackerAdvice>>
+>;
+export type GetTrackerAdviceMutationBody = BodyType<TrackerAdviceBody>;
+export type GetTrackerAdviceMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Get AI coaching for relationship tracker
+ */
+export const useGetTrackerAdvice = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof getTrackerAdvice>>,
+    TError,
+    { data: BodyType<TrackerAdviceBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof getTrackerAdvice>>,
+  TError,
+  { data: BodyType<TrackerAdviceBody> },
+  TContext
+> => {
+  return useMutation(getGetTrackerAdviceMutationOptions(options));
 };
 
 /**
